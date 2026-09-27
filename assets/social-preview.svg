@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" role="img" aria-label="full-lint social preview card">
+  <!-- Hand-copied from assets/logo.svg: tile, shield, check polyline, and
+       gradient stops mirror it exactly, with the gradient id renamed bg-card
+       to avoid a clash. logo.svg is the source of truth; change it there
+first, then copy here. Kept inline so the card is self-contained and
+   renders identically from any rasterizer. -->
+  <defs>
+    <linearGradient id="bg-card" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#34D399"/>
+      <stop offset="1" stop-color="#059669"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="640" fill="#0F172A"/>
+  <g transform="translate(522.67,76.67) scale(3.6667)">
+    <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#bg-card)"/>
+    <path d="M32 12 L46 17 V30 C46 40 40 47 32 51 C24 47 18 40 18 30 V17 Z" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <polyline points="26.5,31.5 30.5,35.5 38.5,26" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="640" y="430" text-anchor="middle" font-family="Helvetica Neue, Arial, sans-serif" font-weight="600" font-size="62" fill="#FFFFFF">full-lint</text>
+  <text x="640" y="500" text-anchor="middle" font-family="Helvetica Neue, Arial, sans-serif" font-size="26" fill="#94A3B8">Same guarantees in every folder · every gate proven to fail · refusals with evidence</text>
+</svg>
