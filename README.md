@@ -1,4 +1,10 @@
-# 🛡️ full-lint
+<!-- The H1 sits inside the centered header block below. -->
+
+<div align="center">
+
+<img src="./assets/logo.svg" width="72" alt="full-lint logo" />
+
+# full-lint
 
 One folder per language — the strictest setup that stays usable.
 
@@ -7,6 +13,8 @@ One folder per language — the strictest setup that stays usable.
 **Same guarantees in every folder · every gate proven to fail · refusals with evidence**
 
 [What you get](#-what-you-get) · [How to use it](#-how-to-use-it) · [The languages](#️-the-languages) · [Hygiene gates](#-the-shared-hygiene-gates) · [Adding a language](#-adding-a-language)
+
+</div>
 
 ## 🎁 What you get
 
