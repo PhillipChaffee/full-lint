@@ -156,4 +156,19 @@ for f in python/run-gates.sh rust/run-gates.sh go/run-gates.sh typescript/run-ga
 	fi
 done
 
+# Pin drift: tools/install.sh is what consumers install from, and hygiene.yml
+# keeps its own install block (this repo's CI predates the script). Every
+# version, registry pin and sha256 digest in that block must appear verbatim
+# in the script, so a bump in one place without the other fails here.
+while read -r pin; do
+	if ! grep -qF -- "$pin" tools/install.sh; then
+		echo "PIN DRIFT: $pin is in .github/workflows/hygiene.yml but not in tools/install.sh"
+		fail=1
+	fi
+done < <(
+	awk '/Install pinned hygiene tools/,/Spell check/' .github/workflows/hygiene.yml |
+		grep -oE '[A-Z_]+_VERSION=[^[:space:]]+|[0-9a-f]{64}|[a-z0-9-]+@[0-9][0-9.]*|yamllint==[0-9.]+' |
+		sed -E 's/^markdownlint-cli2@/MARKDOWNLINT_VERSION=/; s/^jscpd@/JSCPD_VERSION=/; s/^yamllint==/YAMLLINT_VERSION=/'
+)
+
 exit $fail
