@@ -28,7 +28,7 @@ python/run-gates.sh			python/init-python-repo/templates/run-gates.sh
 python/.gitignore			python/init-python-repo/templates/.gitignore
 python/.importlinter			python/init-python-repo/templates/.importlinter
 python/.typos.toml			python/init-python-repo/templates/.typos.toml
-.markdownlint-cli2.jsonc			python/init-python-repo/templates/.markdownlint-cli2.jsonc
+shared/.markdownlint-cli2.jsonc			python/init-python-repo/templates/.markdownlint-cli2.jsonc
 lychee.toml			python/init-python-repo/templates/lychee.toml
 .gitleaks.toml			python/init-python-repo/templates/.gitleaks.toml
 .jscpd.json			python/init-python-repo/templates/.jscpd.json
@@ -44,7 +44,7 @@ rust/run-gates.sh			rust/init-rust-repo/templates/run-gates.sh
 rust/effective-lines-gate.sh			rust/init-rust-repo/templates/effective-lines-gate.sh
 rust/mutation.yml			rust/init-rust-repo/templates/mutation.yml
 rust/.typos.toml			rust/init-rust-repo/templates/.typos.toml
-.markdownlint-cli2.jsonc			rust/init-rust-repo/templates/.markdownlint-cli2.jsonc
+shared/.markdownlint-cli2.jsonc			rust/init-rust-repo/templates/.markdownlint-cli2.jsonc
 lychee.toml			rust/init-rust-repo/templates/lychee.toml
 .gitleaks.toml			rust/init-rust-repo/templates/.gitleaks.toml
 .jscpd.json			rust/init-rust-repo/templates/.jscpd.json
@@ -52,7 +52,7 @@ lychee.toml			rust/init-rust-repo/templates/lychee.toml
 go/ci.yml			go/init-go-repo/templates/ci.yml
 go/run-gates.sh			go/init-go-repo/templates/run-gates.sh
 go/.typos.toml			go/init-go-repo/templates/.typos.toml
-.markdownlint-cli2.jsonc			go/init-go-repo/templates/.markdownlint-cli2.jsonc
+shared/.markdownlint-cli2.jsonc			go/init-go-repo/templates/.markdownlint-cli2.jsonc
 lychee.toml			go/init-go-repo/templates/lychee.toml
 .gitleaks.toml			go/init-go-repo/templates/.gitleaks.toml
 .jscpd.json			go/init-go-repo/templates/.jscpd.json
@@ -60,7 +60,7 @@ lychee.toml			go/init-go-repo/templates/lychee.toml
 typescript/ci.yml			typescript/init-typescript-repo/templates/ci.yml
 typescript/run-gates.sh			typescript/init-typescript-repo/templates/run-gates.sh
 typescript/.typos.toml			typescript/init-typescript-repo/templates/.typos.toml
-.markdownlint-cli2.jsonc			typescript/init-typescript-repo/templates/.markdownlint-cli2.jsonc
+shared/.markdownlint-cli2.jsonc			typescript/init-typescript-repo/templates/.markdownlint-cli2.jsonc
 lychee.toml			typescript/init-typescript-repo/templates/lychee.toml
 .gitleaks.toml			typescript/init-typescript-repo/templates/.gitleaks.toml
 .jscpd.json			typescript/init-typescript-repo/templates/.jscpd.json
@@ -92,7 +92,7 @@ shell/.editorconfig			shell/init-shell-repo/templates/.editorconfig
 shell/test/run_tests.sh			shell/init-shell-repo/templates/test/run_tests.sh
 shell/src/greeter.sh			shell/init-shell-repo/templates/src/greeter.sh
 shell/.typos.toml			shell/init-shell-repo/templates/.typos.toml
-.markdownlint-cli2.jsonc			shell/init-shell-repo/templates/.markdownlint-cli2.jsonc
+shared/.markdownlint-cli2.jsonc			shell/init-shell-repo/templates/.markdownlint-cli2.jsonc
 lychee.toml			shell/init-shell-repo/templates/lychee.toml
 .gitleaks.toml			shell/init-shell-repo/templates/.gitleaks.toml
 .jscpd.json			shell/init-shell-repo/templates/.jscpd.json

@@ -82,6 +82,7 @@ All pinned, each with a recorded proof it fails on demand:
 | `<lang>/README.md` | what is enforced, and the trade-offs |
 | `<lang>/<configs>` | the configs the gates read |
 | `<lang>/init-<lang>-repo/` | the installable skill, with `templates/` byte-copies |
+| `shared/` | the canonical copy of each consumer-facing config the templates share |
 | `add-language/` | the skill that adds a language |
 | `scripts/verify-sync.sh` | fails on template drift |
 | `scripts/install-skills.sh` | installs the skills |
