@@ -4,11 +4,67 @@ The stack below is worked, not theoretical: it ran against a 90k-line
 workspace until `cargo check` fails on any undocumented public item and
 `cargo doc` fails on any broken doc link. Every deny carries its reason.
 
+## How a repo adopts it
+
+A Rust repo references this folder at a pinned full-lint commit instead of
+copying it. It commits five small files: the `./gates` stub (a verbatim copy
+of `consumer/gates`), a caller `ci.yml` and `mutation.yml` that `uses:`
+`.github/workflows/rust.yml` and `rust-mutation.yml` at a full 40-hex SHA
+(on GitLab, a `.gitlab-ci.yml` that includes `gitlab/rust.yml` by SHA with
+an `integrity` hash), plus the two managed files below. `init-rust-repo/`
+writes all of it.
+
+- One code path. `./gates` reads the pin from the repo's CI files, fetches
+  that commit once into `~/.cache/full-lint/<sha>`, and runs
+  `bin/full-lint rust`. The GitHub jobs and the GitLab jobs call the same
+  `./gates code` and `./gates hygiene`, so a workstation, GitHub and GitLab
+  run identical commands. It refuses to run with no pin, or with pins that
+  disagree on the commit or the language.
+- One bump. Moving the SHA in the CI files moves every gate, config and
+  tool pin at once; `./gates sync-check` fails while the pins disagree.
+- Tools. `./gates tools` runs `tools/install.sh`: every download is
+  checked against an embedded sha256 digest, registry installs are
+  version-pinned. Linux x86_64 only; the script refuses elsewhere and names
+  the platform.
+- Configs. The tools read the bundled copies (`rust/deny.toml`,
+  `rust/clippy.toml`, `rust/.typos.toml`, and the root `.gitleaks.toml`,
+  `.jscpd.json`, `.yamllint.yaml`, `lychee.toml`,
+  `shared/.markdownlint-cli2.jsonc`). A repo file of the same name wins,
+  because the repo owner's deliberate choice beats the default; every run,
+  `./gates list` and a CI warning annotation report it as
+  `override: <file> (bundled copy not used)`, so it never passes silently.
+- Managed files. The `[workspace.lints]` tables live in a marked block in
+  the repo's Cargo.toml, and `rust-toolchain.toml` is managed whole. Both
+  must equal the canonical copies here (`Cargo.toml.example` and
+  `rust-toolchain.toml`, comments stripped). A changed or missing canonical
+  key fails `sync-check`; an added key needs a trailing
+  `# exception: <reason>` and then passes with a warning; an added key
+  without the marker fails. `./gates sync` rewrites both files and keeps the
+  marked additions. A canonical value cannot be lowered locally: the floor
+  is shared, and a lint the repo truly cannot meet takes a scoped
+  `#[expect(..., reason = "...")]` in the code.
+
+```bash
+./gates                 # every gate, in parallel
+./gates code            # or: hygiene, or any gate names (./gates lint coverage)
+./gates --serial        # one gate at a time, live output
+./gates list            # gates, their commands, and any config override
+./gates fix             # cargo fmt and shfmt -w
+./gates sync            # rewrite the managed files (sync --check only reports)
+./gates tools           # install the pinned tools (or: tools code|hygiene|mutation)
+./gates mutation        # the nightly mutation gate
+./gates version         # the pinned commit, its tag, the GitLab integrity value
+```
+
+`FULL_LINT_DIR=<checkout> ./gates` runs a local full-lint checkout instead
+of the pinned commit, for working on full-lint itself.
+
 ## What is enforced
 
 ### Linting — clippy
 
-`Cargo.toml.example` carries the `[workspace.lints]` table:
+`Cargo.toml.example` carries the `[workspace.lints]` table (the managed
+block `./gates sync` writes into a repo's Cargo.toml):
 
 - `clippy::all`, `pedantic`, `nursery`, `cargo` groups at `warn` with
   `priority = -1`, because an individual lint entry at the default priority 0
@@ -16,7 +72,7 @@ workspace until `cargo check` fails on any undocumented public item and
 - A shortlist of `restriction` picks: the failure modes specific to the code
   you are writing (in the phone app that was `unwrap_used`, `expect_used`,
   `panic`, `print_stdout`, `exit`...). Choose YOUR picks; every one gets a
-  reason, per house rule. The template ships `allow_attributes_without_reason`
+  reason, per house rule. The table ships `allow_attributes_without_reason`
   as a pick: an allow without a why is the bug — the suppression outlives its
   reason and nothing records it. The suppression path stays
   `#[expect(lint, reason = "...")]`: a reasoned expect does not trip the pick,
@@ -54,8 +110,8 @@ measurement tool" — and counts flat decisions only.
 - Threshold: **15** — Sonar's own S3776 default, the parity anchor every
   language in this baseline gates at (go gocognit 15, python complexipy 15,
   shell omen 15, TS sonarjs 15). arborist has no config file, so the
-  threshold lives in the gate command (ci.yml and run-gates.sh); raise it
-  only with a written reason there.
+  threshold lives in the gate command (`rust/gates.sh`); raise it only
+  with a written reason there.
 - Measured divergences from the whitepaper, recorded honestly: flat `else
   if` chains inflate (a 4-way chain scores 9 where the spec counts 4,
   monotonic in chain depth — the conservative direction); labeled breaks
@@ -85,7 +141,7 @@ missing.rs                          -> "error: file not found", exit 2
 ### File length — the effective-lines gate
 
 ```bash
-./effective-lines-gate.sh
+./gates file-length     # runs rust/effective-lines-gate.sh from the pinned commit
 ```
 
 Clippy has no file-length rule (verified against the pinned toolchain's
@@ -182,7 +238,8 @@ wire keys the serde rename hid, who sends what, defaults, absence behavior.
 Machine: the clippy/rustdoc doc lints above. Policy (no linter checks prose):
 the four house rules — present state only; why-not-what; `#NNN` cited only
 attached to a live constraint; nothing displays a number no server sends.
-Ship them verbatim in the new repo's AGENTS.md (the template carries them).
+Ship them verbatim in the new repo's AGENTS.md (`AGENTS.md.example` carries
+them).
 
 Policy, enforced: a TODO or FIXME marker in Rust source fails the build —
 the uniform house TODO policy (python fails the marker through FIX002,
@@ -208,7 +265,9 @@ a clean project sits at 100.00% on all three axes, and a seeded untested
 function drops lines to 86.36%, functions to 75.00%, regions to 86.36% —
 all three fail-under switches exit 1 on the same seed.
 
-Add `llvm-tools-preview` to the CI toolchain; see `ci.yml`. THE GATE IS
+`rust-toolchain.toml` requests `llvm-tools-preview`, so rustup installs it
+on the first cargo call; the gate writes its report to `target/lcov.info`,
+where no hygiene gate running beside it scans it. THE GATE IS
 TESTED: measured on the pinned toolchain (cargo-llvm-cov 0.9.0), a fixture
 with every statement covered exits 0 at 100.00% TOTAL, and the same fixture
 with one untested function exits 1 under the three-axis gate at
@@ -220,9 +279,11 @@ acceptance test).
 `cargo-mutants` mutates the workspace source (operators, literals, arm
 bodies) and runs the test suite against each mutant: a mutant the tests do
 not catch is behavior the suite never pinned down (v27.1.0, pinned in
-mutation.yml — the scheduled workflow, not the PR path). The results file
-`mutants.out/outcomes.json` carries the totals the floor reads; it is
-disposable tool output, like `target/`.
+`tools/install.sh`; `./gates mutation` runs it from the repo's scheduled
+`rust-mutation.yml` caller, not the PR path). The results file
+`target/mutants.out/outcomes.json` carries the totals the floor reads; it
+is disposable tool output inside `target/`, where no hygiene gate scans the
+mutated source copies.
 
 The score floor is 85, checked from the results file: `cargo mutants`
 exits nonzero whenever ANY mutant survives (its zero-missed CI mode), and
@@ -234,15 +295,16 @@ equivalent-mutant headroom instead: any genuinely untested code drops the
 score below it.
 
 ```bash
-cargo mutants
-python3 -c "import json, sys; s = json.load(open('mutants.out/outcomes.json')); score = 100 * s['caught'] // s['total_mutants']; print('mutation score %d%% (caught %d/%d, floor 85)' % (score, s['caught'], s['total_mutants'])); sys.exit(0 if score >= 85 else 1)"
+./gates mutation        # runs the two commands below; only exit 2 from cargo mutants is tolerated
+cargo mutants --output target
+python3 -c "import json, sys; s = json.load(open('target/mutants.out/outcomes.json')); score = 100 * s['caught'] // s['total_mutants']; print('mutation score %d%% (caught %d/%d, floor 85)' % (score, s['caught'], s['total_mutants'])); sys.exit(0 if score >= 85 else 1)"
 ```
 
 Floor reason, from the first measured run on the template fixture: 19/21
 caught = 90%, with the two misses the clamp equivalent mutants above. Why
 nightly: a mutant run multiplies the test suite by the mutant count (14s
 for 21 mutants on a three-function fixture; it scales with both), so it
-cannot sit between a commit and a merge. `run-gates.sh` and the PR `ci.yml`
+cannot sit between a commit and a merge. `./gates` and the PR workflow
 deliberately exclude it. Trade-off accepted: a surviving mutant waits up to
 a day for the nightly run to flag it. Remedy: add a test that kills the
 mutant. Measured wall time: 14s clean, 18s seeded. THE GATE IS TESTED: the
@@ -274,11 +336,12 @@ mutation score 73% (caught 19/26, floor 85)     # seeded, exit 1
 
 ### Hygiene — spell check (typos)
 
-`typos` checks every file for misspellings (typos 1.50.1, pinned in ci.yml;
-configuration in the repo-root `.typos.toml`).
+`typos` checks every file for misspellings (typos 1.50.1, pinned in
+`tools/install.sh`; bundled configuration `rust/.typos.toml`, which a repo's
+own `.typos.toml` replaces).
 
 ```bash
-typos
+typos --config rust/.typos.toml
 ```
 
 Remedy: fix the spelling, or add the identifier to `.typos.toml` with a
@@ -301,13 +364,15 @@ error: `recieve` should be `receive`
 
 ### Hygiene — markdown lint + link check
 
-`markdownlint-cli2` lints every markdown file (v0.23.2; config in the
-repo-root `.markdownlint-cli2.jsonc`) and `lychee` checks every link
-(v0.24.2; config in the repo-root `lychee.toml`, retry then fail).
+`markdownlint-cli2` lints every markdown file (v0.23.2; bundled config
+`shared/.markdownlint-cli2.jsonc`) and `lychee` checks every link
+(v0.24.2; bundled config `lychee.toml`, retry then fail). Markdown lint
+skips `target/`: `cargo doc` writes a font-license `.md` there that would
+fail it.
 
 ```bash
-markdownlint-cli2 "**/*.md"
-lychee --no-progress .
+markdownlint-cli2 --config shared/.markdownlint-cli2.jsonc "**/*.md" "#target"
+lychee --no-progress --config lychee.toml .
 ```
 
 Remedy: fix the markdown or the link. The config carries four reasoned
@@ -324,13 +389,12 @@ lychee: [ERROR] http://127.0.0.1:9/dead (at 1:1) | Connection refused
 ### Hygiene — secret scan (gitleaks)
 
 `gitleaks` scans for committed credentials (v8.30.1, default rule set;
-config in the repo-root `.gitleaks.toml`). CI scans the full git history
-(`fetch-depth: 0`), so an already-committed secret is caught too; the local
-runner scans the working tree with `--no-git`.
+bundled config `.gitleaks.toml`). Every run scans the full git history (CI
+checks out with `fetch-depth: 0`), so an already-committed secret is caught
+too, and a local run and CI scan the same thing.
 
 ```bash
-gitleaks detect --source . --redact     # CI: full history
-gitleaks detect --no-git --redact       # local runner: working tree
+gitleaks detect --source . --redact --config .gitleaks.toml
 ```
 
 Remedy: rotate the secret, purge it from history, and never allowlist a real
@@ -347,10 +411,10 @@ File:        proof-seed-secret.txt:1
 ### Hygiene — copy-paste detection (jscpd)
 
 `jscpd` tokenizes every source file and fails above the duplication
-threshold (v5.2.0; config in the repo-root `.jscpd.json`, threshold 5).
+threshold (v5.2.0; bundled config `.jscpd.json`, threshold 5).
 
 ```bash
-jscpd
+jscpd --config .jscpd.json .
 ```
 
 Remedy: extract the shared code into one place. The config ignores four
@@ -403,18 +467,19 @@ license exit code: 130
 ### Hygiene — supply-chain policy (cargo-deny: RustSec advisories, licenses, bans)
 
 `cargo-deny` is the rust-native supply-chain engine on top of the
-cross-language osv-scanner pair above (v0.20.2, install
-`cargo install cargo-deny --locked --version 0.20.2`, config in `deny.toml`
-with a reason on every entry). It adds what osv-scanner cannot see:
+cross-language osv-scanner pair above (v0.20.2, installed by
+`tools/install.sh`; bundled config `rust/deny.toml` with a reason on every
+entry, which a repo's own `deny.toml` replaces). It adds what osv-scanner cannot see:
 yanked releases (denied — a yanked release is a recall), unmaintained and
 unsound advisories on direct dependencies, banned crates with their
 replacement, duplicate-version convergence, and unknown registries or git
-sources. CI runs one labeled step per check so a failure names its gate.
+sources. One gate per check (`deny-advisories`, `deny-licenses`,
+`deny-bans`) so a failure names its gate.
 
 ```bash
-cargo deny check advisories
-cargo deny check licenses
-cargo deny check bans
+cargo deny --config rust/deny.toml check advisories
+cargo deny --config rust/deny.toml check licenses
+cargo deny --config rust/deny.toml check bans
 ```
 
 Remedy: bump or replace the flagged crate; ignore an advisory only with its
@@ -456,7 +521,7 @@ older than 90 days fails the gate rather than scanning with stale data.
 `cargo-shear` parses every source file with rust-analyzer's parser and
 diffs the imports it finds against the dependencies the manifests declare:
 a crate declared in `[dependencies]` that no source file imports is the
-failing case (v1.13.4, pinned in ci.yml). CI runs it with
+failing case (v1.13.4, pinned in `tools/install.sh`). CI runs it with
 `--deny-warnings` — unused *optional* dependencies, empty files, and
 unlinked files are warnings by default, and the house rule denies them.
 
@@ -484,15 +549,18 @@ shear/unused_dependency
 
 The repository's own shell scripts and workflow files are linted with the
 same severity as its code: shellcheck (v0.11.0), shfmt -d (v3.14.0),
-yamllint (v1.38.0, config in the repo-root `.yamllint.yaml`), and
-actionlint (v1.7.12) on every workflow file, including the per-folder ci.yml
-templates.
+yamllint (v1.38.0, bundled config `.yamllint.yaml`), and actionlint
+(v1.7.12). The shell gates cover the tracked `*.sh` files plus the `./gates`
+stub, and pass every file to one tool call, so any failing file fails the
+gate. yamllint reads `.github/workflows/*.yml` and `.gitlab-ci.yml`;
+actionlint reads the GitHub workflows only. A repo with nothing to lint
+passes and says so, because a GitLab-only repo has no GitHub workflow.
 
 ```bash
-for sh in $(git ls-files "*.sh"); do shellcheck "$sh"; done
-for sh in $(git ls-files "*.sh"); do shfmt -d "$sh"; done
-yamllint ./.github/workflows/*.yml $(find . -mindepth 2 -maxdepth 2 \( -name "ci.yml" -o -name "mutation.yml" \) -not -path "./.github/*" | tr "\n" " ")
-actionlint ./.github/workflows/*.yml $(find . -mindepth 2 -maxdepth 2 \( -name "ci.yml" -o -name "mutation.yml" \) -not -path "./.github/*" | tr "\n" " ")
+{ git ls-files -- "*.sh"; echo gates; } | xargs -r -d "\n" shellcheck
+{ git ls-files -- "*.sh"; echo gates; } | xargs -r -d "\n" shfmt -d
+yamllint -c .yamllint.yaml .github/workflows/*.yml .gitlab-ci.yml
+actionlint .github/workflows/*.yml
 ```
 
 Remedy: fix the script or the workflow; yamllint deviations carry reasons in
@@ -507,11 +575,13 @@ yamllint: proof-seed.yaml:2 syntax error (exit 1)
 
 ### Formatter
 
-`cargo fmt --all -- --check` in CI. `rustfmt.toml` marks its nightly-only
-options (`wrap_comments` and friends) if you adopt them; on a stable pin
-leave the file minimal.
+`cargo fmt --all -- --check`. full-lint bundles no `rustfmt.toml`: cargo
+passes the manifest's edition to rustfmt, and the powerful comment options
+(`wrap_comments` and friends) are nightly-only. A repo that pins nightly
+rustfmt adds its own `rustfmt.toml`, and rustfmt reads it as usual.
 
-CI passes `--lcov --output-path lcov.info` and uploads it to Coveralls
+The coverage gate writes `target/lcov.info`, and the reusable workflow
+uploads it to Coveralls
 (`coverallsapp/github-action@v2`, free for public repos on the
 built-in GITHUB_TOKEN);
 llvm-cov writes the report before it evaluates the gate (measured), so
@@ -521,33 +591,27 @@ inserts the badge line into the new repository's README.
 
 ## Commands
 
-```bash
-./run-gates.sh              # run every gate below, in parallel
-rustup component add llvm-tools-preview
-cargo clippy --workspace --all-targets -- -D warnings   # lint gate
-RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps   # doc gate
-cargo test --workspace                                  # also runs doc tests
-cargo llvm-cov --workspace --fail-under-lines 95 --lcov --output-path lcov.info
-cargo install --locked --version 0.2.1 arborist-cli     # once, for the cognitive gate
-arborist --threshold 15 --exceeds-only --gitignore --languages rust .   # cognitive gate
-./effective-lines-gate.sh                               # file-length gate (max 1000)
-cargo fmt --all -- --check                              # format gate
-# ...and CI uploads the lcov.info to Coveralls for the free badge
-```
+`./gates list` prints every gate with its exact command; the
+how-to-adopt section above lists the subcommands. The code group is
+`format`, `lint`, `doc`, `tests`, `coverage`, `cognitive`, `file-length`;
+the hygiene group is the eleven shared hygiene gates plus `deny-advisories`,
+`deny-licenses`, `deny-bans`, `unused-deps`, `todo-policy` and
+`sync-check`. Every Rust gate runs with `RUSTFLAGS=-D warnings`, locally as
+on CI.
 
-Runner-CI parity: 23 runner entries <-> 23 CI gate steps (7 language gates
-and 16 hygiene gates, cargo-deny's three among them; the Coveralls upload,
-the doc job's rust-cache step, and the tool installs are not gates). The
-runner deliberately excludes the nightly mutation gate (mutation.yml), so
-its absence there is the documented decision, not a miss.
+Runner-CI parity holds by construction: the GitHub `code` and `hygiene`
+jobs and the two GitLab jobs run `./gates code` and `./gates hygiene`, the
+same registry a workstation runs (the Coveralls upload and the tool installs
+are not gates). The nightly mutation gate runs only from the scheduled
+workflow, by documented decision.
 
 ## Trade-offs ("strict but staying usable")
 
-- CI tool installs: the pinned prebuilt binaries are checksum-verified
-  where upstream publishes checksums (lychee, gitleaks, osv-scanner,
-  actionlint, cargo-deny) and release-tag-pinned where none is published
-  (typos, shellcheck, shfmt, cargo-mutants) — the residual risk is
-  recorded in the install block and reviewed on every pin bump. yamllint is
+- Tool installs: `tools/install.sh` checks every prebuilt download against
+  a sha256 digest computed from the exact release asset at pin time, so a
+  re-uploaded asset fails the install instead of executing; registry
+  installs (npm, pip, cargo) are version-pinned and resolve their trees
+  from the registry, reviewed on every pin bump. yamllint is
   the one registry-install exception: GPL-3.0-or-later, deliberately excluded
   from the permissive-only python lockfile, installed by exact pin.
 - arborist-cli is a crates.io registry build (`cargo install --locked
@@ -566,9 +630,11 @@ its absence there is the documented decision, not a miss.
   subcommand touches the network, and against a cargo-installed binary it
   refuses to self-update and only version-checks; the gate command never
   invokes it. Residual: no checksum anchor beyond crates.io's own; CI
-  compiles the tree on every runner (~3 min measured locally, rust-cache
-  does not persist `~/.cargo/bin`) — accepted for the template; a
-  digest-pinned prebuilt download is the alternative if that cost bites.
+  compiles the tree when the tools cache is cold (about 1 min measured
+  here; the GitHub code job caches `~/.cache/full-lint` through rust-cache,
+  the GitLab job does not cache because GitLab caches only paths inside
+  the project, where the hygiene gates would scan them). A digest-pinned
+  prebuilt download is the alternative if that cost bites.
 - `doc_paragraphs_missing_punctuation` has one measured false-positive
   shape: a paragraph whose last character sits inside a code span (it ends
   with `` `foo()` ``, not with a sentence) fires. Remedy: end the
@@ -632,7 +698,9 @@ not accepted gaps and must not be built (`tasks/expand-lint-gates/notes/refusal-
 
 ## The init skill
 
-`init-rust-repo/` initializes a new Rust repository with all of this. Install:
-`scripts/install-skills.sh` (or copy the folder to `~/.agents/skills/`). The
-templates are byte-identical copies — `scripts/verify-sync.sh` fails if they
-drift.
+`init-rust-repo/` adopts all of this in a new Rust repository: it writes
+the five files above, runs `./gates sync`, `./gates tools` and `./gates`,
+and proves the coverage gate fails below 95%. Install:
+`scripts/install-skills.sh` (or copy the folder to `~/.agents/skills/`).
+The skill copies nothing else, so `scripts/verify-sync.sh` has no Rust
+pairings left; `./gates sync-check` catches drift in the consumer instead.

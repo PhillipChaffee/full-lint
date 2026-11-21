@@ -42,6 +42,13 @@ Starting a new project in one of the five languages:
 3. Run the skill in your new repo — it writes the configs and the gate
    scripts.
 
+Rust adopts by reference instead of by copy. The repo commits a `./gates`
+stub, CI files that pin one full-lint commit, and two managed files; the
+gates, configs and tool pins stay here and arrive with the pin. `./gates`
+runs the same commands locally, in the reusable GitHub workflow and in the
+GitLab include. See [`rust/README.md`](rust/README.md#how-a-repo-adopts-it).
+The other four languages still copy their templates.
+
 ## 🗂️ The languages
 
 Code gates only — details and reasoning live in each folder's README.
@@ -66,7 +73,7 @@ Beside the code gates, every folder runs the shared hygiene set:
 
 All pinned, each with a recorded proof it fails on demand:
 
-- local run — the folder's `run-gates.sh`
+- local run — the folder's `run-gates.sh` (rust: `./gates`)
 - per-language extras — deptry, vulture, cargo-deny, knip, `go mod tidy -diff`, the rest — in the folder READMEs
 - shell skips advisories + licenses: no lockfile manifest
 - mutation testing nightly where wired (mutmut for python, cargo-mutants for
@@ -81,10 +88,15 @@ All pinned, each with a recorded proof it fails on demand:
 | --- | --- |
 | `<lang>/README.md` | what is enforced, and the trade-offs |
 | `<lang>/<configs>` | the configs the gates read |
-| `<lang>/init-<lang>-repo/` | the installable skill, with `templates/` byte-copies |
+| `<lang>/init-<lang>-repo/` | the installable skill, with `templates/` byte-copies (rust: none, it adopts by reference) |
+| `consumer/gates` | the stub a Rust repo commits as `./gates` |
+| `bin/`, `lib/`, `rust/gates.sh` | the gate runner, the shared hygiene gates, the drift check, the Rust gate set |
+| `tools/install.sh` | installs every pinned tool, sha256-checked |
+| `.github/workflows/rust*.yml`, `gitlab/rust.yml` | the reusable GitHub workflows and the GitLab include |
+| `tests/` | self-tests for the drift check and the stub |
 | `shared/` | the canonical copy of each consumer-facing config the templates share |
 | `add-language/` | the skill that adds a language |
-| `scripts/verify-sync.sh` | fails on template drift |
+| `scripts/verify-sync.sh` | fails on template drift and on pins that differ from `tools/install.sh` |
 | `scripts/install-skills.sh` | installs the skills |
 | `tasks/*/notes/` | refusal and parity-audit notes |
 

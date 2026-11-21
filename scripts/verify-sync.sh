@@ -33,22 +33,6 @@ lychee.toml			python/init-python-repo/templates/lychee.toml
 .gitleaks.toml			python/init-python-repo/templates/.gitleaks.toml
 .jscpd.json			python/init-python-repo/templates/.jscpd.json
 .yamllint.yaml			python/init-python-repo/templates/.yamllint.yaml
-rust/Cargo.toml.example			rust/init-rust-repo/templates/Cargo.toml.example
-rust/clippy.toml			rust/init-rust-repo/templates/clippy.toml
-rust/rust-toolchain.toml			rust/init-rust-repo/templates/rust-toolchain.toml
-rust/rustfmt.toml			rust/init-rust-repo/templates/rustfmt.toml
-rust/AGENTS.md.example			rust/init-rust-repo/templates/AGENTS.md.example
-rust/deny.toml			rust/init-rust-repo/templates/deny.toml
-rust/ci.yml			rust/init-rust-repo/templates/ci.yml
-rust/run-gates.sh			rust/init-rust-repo/templates/run-gates.sh
-rust/effective-lines-gate.sh			rust/init-rust-repo/templates/effective-lines-gate.sh
-rust/mutation.yml			rust/init-rust-repo/templates/mutation.yml
-rust/.typos.toml			rust/init-rust-repo/templates/.typos.toml
-shared/.markdownlint-cli2.jsonc			rust/init-rust-repo/templates/.markdownlint-cli2.jsonc
-lychee.toml			rust/init-rust-repo/templates/lychee.toml
-.gitleaks.toml			rust/init-rust-repo/templates/.gitleaks.toml
-.jscpd.json			rust/init-rust-repo/templates/.jscpd.json
-.yamllint.yaml			rust/init-rust-repo/templates/.yamllint.yaml
 go/ci.yml			go/init-go-repo/templates/ci.yml
 go/run-gates.sh			go/init-go-repo/templates/run-gates.sh
 go/.typos.toml			go/init-go-repo/templates/.typos.toml
@@ -101,29 +85,28 @@ PAIRINGS
 )
 
 # Cross-folder drift check: the hygiene install blocks and the license
-# allow-list are intentionally shared across the four manifest-bearing folder
+# allow-list are intentionally shared across the three copy-model folder
 # ci.yml files and the root dogfood workflow (jscpd ignores those globs and
 # no pairing rows cross folders, so nothing else catches one folder's pin
-# bumping while the other three lag). Per-folder extras (python's pip tools,
-# rust's cargo-deny) are filtered before comparing. shell/ is excluded by
-# documented decision: it ships no dependency lockfile, so no osv-scanner
-# license step and a different install set (shell/ci.yml documents it). shell/ is deliberately outside this check:
-# its ci.yml drops the osv-scanner advisories and license gates (shell
-# carries no lockfile manifest), so its install block and license list
-# differ from the shared fingerprint by design.
+# bumping while the others lag). Rust has no ci.yml any more: its pins live
+# in tools/install.sh and its license list in lib/hygiene.sh, both checked
+# below. Python's pip tools are filtered before comparing. shell/ is
+# deliberately outside this check: its ci.yml drops the osv-scanner
+# advisories and license gates (shell carries no lockfile manifest), so its
+# install block and license list differ from the shared fingerprint by
+# design.
 fingerprint() {
-	# Per-folder extras are filtered before comparing: python's pip tools
-	# (installed from the hash-pinned lock), rust's cargo-deny and cargo-shear
-	# downloads, and all pip/npm registry installs (which differ by folder by
-	# design).
+	# Python's pip tools (installed from the hash-pinned lock) and all
+	# pip/npm registry installs (which differ by folder by design) are
+	# filtered before comparing.
 	{ awk '/Install pinned hygiene tools/,/Spell check/' "$1" 2>/dev/null || true; } |
-		{ grep -vE 'deptry|vulture|import-linter|DENY_VERSION|cargo-deny|deny\.|denyx|pinned versions|cargo-shear|SHEAR_VERSION|shear\.|pip install|npm install' || true; } |
+		{ grep -vE 'deptry|vulture|import-linter|pinned versions|pip install|npm install' || true; } |
 		{ grep -vE '^[[:space:]]*#' || true; } |
 		{ grep -vE '^[[:space:]]*(- name:|- run:|run: \|?)?[[:space:]]*$' || true; } |
 		sed 's/^[[:space:]]*//' | sort | sha256sum | awk '{print $1}'
 }
 expected_license='MIT,Apache-2.0,ISC,BSD-3-Clause,BSD-2-Clause,MPL-2.0,PSF-2.0,Unicode-3.0,Python-2.0,Unlicense,CC0-1.0,0BSD,Apache-1.1,BSD-3-Clause-Clear,LGPL-3.0-only,BlueOak-1.0.0,CC-BY-3.0'
-for f in .github/workflows/hygiene.yml python/ci.yml rust/ci.yml go/ci.yml typescript/ci.yml; do
+for f in .github/workflows/hygiene.yml python/ci.yml go/ci.yml typescript/ci.yml; do
 	fp="$(fingerprint "$f")"
 	if [[ "$fp" != "$(fingerprint .github/workflows/hygiene.yml)" ]]; then
 		echo "CROSS-FOLDER DRIFT: $f install block differs from .github/workflows/hygiene.yml"
@@ -140,7 +123,8 @@ if ! grep -qF "$expected_license" lib/hygiene.sh; then
 fi
 
 # Runner drift: the shared hygiene gate entries (same names, same commands)
-# must match across the four folder run-gates.sh files; per-language entries
+# must match across the copy-model folders' run-gates.sh files (rust's live
+# in lib/hygiene.sh); per-language entries
 # are filtered out by name. shell/ is outside this check for the same
 # manifest-less reason: its runner has no advisories or license-check
 # entries to fingerprint.
@@ -153,7 +137,7 @@ runner_fingerprint() {
 		tr -d "\042\047\134" |
 		sort | sha256sum | awk '{print $1}'
 }
-for f in python/run-gates.sh rust/run-gates.sh go/run-gates.sh typescript/run-gates.sh shell/run-gates.sh; do
+for f in python/run-gates.sh go/run-gates.sh typescript/run-gates.sh shell/run-gates.sh; do
 	if [[ "$(runner_fingerprint "$f")" != "$(runner_fingerprint python/run-gates.sh)" ]]; then
 		echo "CROSS-FOLDER DRIFT: $f hygiene gate entries differ from python/run-gates.sh"
 		fail=1
@@ -161,7 +145,7 @@ for f in python/run-gates.sh rust/run-gates.sh go/run-gates.sh typescript/run-ga
 done
 
 # Pin drift: tools/install.sh is what consumers install from, and hygiene.yml
-# keeps its own install block (this repo's CI predates the script). Every
+# keeps its own install block. Every
 # version, registry pin and sha256 digest in that block must appear verbatim
 # in the script, so a bump in one place without the other fails here.
 while read -r pin; do

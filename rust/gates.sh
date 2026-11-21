@@ -1,5 +1,5 @@
-# The Rust gate set: the commands the old rust/ci.yml ran, registered once
-# for ./gates, the reusable GitHub workflow and the GitLab entry point.
+# The Rust gate set, registered once for ./gates, the reusable GitHub
+# workflow and the GitLab entry point.
 # shellcheck shell=bash
 
 # CI parity: warnings fail every Rust gate locally too, not only on CI.
