@@ -1,0 +1,24 @@
+# Reusable workflow: nightly mutation testing for a repo that adopts
+# full-lint by reference. A mutant run multiplies the test suite by the
+# mutant count, so the caller schedules it off the PR path. The floor and
+# the exit-code handling live in rust/gates.sh (`./gates mutation`).
+permissions:
+  contents: read  # least privilege: no step in this workflow writes to the repo (GitHub secure-use reference)
+name: full-lint rust mutation
+
+on:
+  workflow_call:
+
+jobs:
+  mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60  # bounds a hung network gate; GitHub's default is 360
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6  # v2
+        with:
+          cache-directories: ~/.cache/full-lint
+      - name: Install cargo-mutants
+        run: ./gates tools mutation
+      - name: Mutation gate (survivors tolerated, errors fail, floor 85)
+        run: ./gates mutation

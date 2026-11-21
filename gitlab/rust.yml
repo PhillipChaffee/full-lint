@@ -1,0 +1,39 @@
+# GitLab entry point: the Rust gates for a repo that adopts full-lint by
+# reference. The consumer includes this file by commit SHA with an
+# integrity hash (`./gates version` prints both):
+#
+#   include:
+#     - remote: https://raw.githubusercontent.com/PhillipChaffee/full-lint/<sha>/gitlab/rust.yml
+#       integrity: sha256-<base64>
+#
+# Both jobs run the consumer's committed ./gates stub, which reads that pin
+# from .gitlab-ci.yml, so GitLab runs the same commands as GitHub and a
+# workstation.
+
+# The image's Rust matches rust/rust-toolchain.toml (1.98.0), so rustup
+# only adds the pinned components. Pinned by the multi-arch index digest
+# read from Docker Hub, so a retagged image cannot change what runs.
+.full-lint-rust:
+  image: rust:1.98.0-trixie@sha256:620dbcd124499c59e2406d3741574b5c5838cf9eb9656f0c3a03948f79b02959
+  # No cache: GitLab caches only paths inside the project dir, and every
+  # hygiene gate would then scan the cached full-lint checkout and tools.
+
+full-lint-code:
+  extends: .full-lint-rust
+  timeout: 20m  # bounds a hung network gate
+  script:
+    - ./gates tools code
+    - ./gates code
+
+full-lint-hygiene:
+  extends: .full-lint-rust
+  timeout: 20m  # bounds a hung network gate
+  variables:
+    GIT_DEPTH: 0  # the secret scan reads the whole history
+  before_script:
+    # markdownlint-cli2 and jscpd install through npm, yamllint into a venv;
+    # trixie ships Node 20, which both support.
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends nodejs npm python3-venv
+  script:
+    - ./gates tools hygiene
+    - ./gates hygiene

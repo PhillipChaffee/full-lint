@@ -98,7 +98,7 @@ jobs:
       - name: Shell format (shfmt v3.14.0)
         run: for sh in $(git ls-files "*.sh") consumer/gates bin/full-lint; do shfmt -d "$sh"; done
       - name: Workflow YAML lint (yamllint v1.38.0)
-        run: yamllint ./.github/workflows/*.yml ./*/ci.yml ./*/mutation.yml
+        run: yamllint ./.github/workflows/*.yml ./*/ci.yml ./*/mutation.yml ./gitlab/*.yml
       - name: Workflow lint (actionlint v1.7.12)
         run: actionlint ./.github/workflows/*.yml ./*/ci.yml ./*/mutation.yml
       - name: Lockfile integrity (hash-pinned install)

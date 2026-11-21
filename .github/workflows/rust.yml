@@ -1,0 +1,56 @@
+# Reusable workflow: the Rust gates for a repo that adopts full-lint by
+# reference. The caller pins this file by commit SHA; each job checks the
+# caller out and runs the caller's committed ./gates stub, which reads that
+# same pin from the caller's CI files and runs the gates of that commit. One
+# code path, the same one `./gates` takes on a workstation.
+#
+# No concurrency block here: a called workflow's github.workflow is the
+# caller's name, so a group set here would collide with the caller's own;
+# the caller sets concurrency (see rust/init-rust-repo/SKILL.md).
+permissions:
+  contents: read  # least privilege: no step in this workflow writes to the repo (GitHub secure-use reference)
+name: full-lint rust
+
+on:
+  workflow_call:
+
+jobs:
+  code:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20  # bounds a hung network gate; GitHub's default is 360
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      # rustup reads rust-toolchain.toml (channel, components incl.
+      # llvm-tools-preview) on the first cargo call; no toolchain step needed.
+      # ~/.cache/full-lint holds the fetched full-lint commit and the pinned
+      # tools (arborist builds from source, about a minute uncached).
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6  # v2
+        with:
+          cache-directories: ~/.cache/full-lint
+      - name: Install pinned tools
+        run: ./gates tools code
+      - name: Code gates (format, lint, doc, tests, coverage, cognitive, file-length)
+        run: ./gates code
+      # Free for public repositories, no account and no secret: the action
+      # takes the built-in GITHUB_TOKEN. The badge is not a gate: a
+      # coveralls.io flake must not redden an otherwise-green build. The
+      # coverage gate writes the report before it evaluates the thresholds,
+      # so a failing run still uploads.
+      - name: Upload coverage to Coveralls
+        if: always()
+        continue-on-error: true
+        uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329  # v2
+        with:
+          file: target/lcov.info
+
+  hygiene:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20  # bounds a hung network gate; GitHub's default is 360
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          fetch-depth: 0  # the secret scan reads the whole history
+      - name: Install pinned tools
+        run: ./gates tools hygiene
+      - name: Hygiene gates
+        run: ./gates hygiene
