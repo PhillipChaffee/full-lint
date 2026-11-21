@@ -22,6 +22,10 @@ jobs:
           fetch-depth: 0
       - name: Template drift (scripts/verify-sync.sh)
         run: scripts/verify-sync.sh
+      - name: Drift-check self-test (tests/drift.sh)
+        run: tests/drift.sh
+      - name: Gates stub self-test (tests/stub.sh)
+        run: tests/stub.sh
       - name: Install pinned hygiene tools
         run: |
           # Pinned hygiene tools: one download per tool, no installer actions.
@@ -89,9 +93,10 @@ jobs:
       - name: License check (osv-scanner v2.5.1)
         run: osv-scanner scan -r . --licenses="MIT,Apache-2.0,ISC,BSD-3-Clause,BSD-2-Clause,MPL-2.0,PSF-2.0,Unicode-3.0,Python-2.0,Unlicense,CC0-1.0,0BSD,Apache-1.1,BSD-3-Clause-Clear,LGPL-3.0-only,BlueOak-1.0.0,CC-BY-3.0"
       - name: Shell lint (shellcheck v0.11.0)
-        run: for sh in $(git ls-files "*.sh"); do shellcheck "$sh"; done
+        # consumer/gates and bin/full-lint carry no .sh suffix.
+        run: for sh in $(git ls-files "*.sh") consumer/gates bin/full-lint; do shellcheck "$sh"; done
       - name: Shell format (shfmt v3.14.0)
-        run: for sh in $(git ls-files "*.sh"); do shfmt -d "$sh"; done
+        run: for sh in $(git ls-files "*.sh") consumer/gates bin/full-lint; do shfmt -d "$sh"; done
       - name: Workflow YAML lint (yamllint v1.38.0)
         run: yamllint ./.github/workflows/*.yml ./*/ci.yml ./*/mutation.yml
       - name: Workflow lint (actionlint v1.7.12)

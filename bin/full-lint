@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# full-lint's entry point: full-lint <lang> [command | gate-or-group...] [--serial]
+# A consumer reaches it through its committed ./gates stub, which fetches
+# the pinned full-lint commit and execs this file from the consumer's root.
+# The sourced lib/ and <lang>/gates.sh files define the tables used below
+# and are linted on their own, so shellcheck does not follow them here.
+# shellcheck disable=SC1090,SC1091,SC2154
+set -uo pipefail
+
+FULL_LINT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+export FULL_LINT_ROOT
+export FULL_LINT_SHA="${FULL_LINT_SHA:-local}"
+export FULL_LINT_TAG="${FULL_LINT_TAG:-}"
+tools_dir="${XDG_CACHE_HOME:-$HOME/.cache}/full-lint/tools"
+
+usage() {
+	cat <<'EOF'
+usage: ./gates [gate-or-group...] [--serial]
+       ./gates list | fix | sync [--check] | tools [group...] | mutation | version
+
+  (no arguments)   run every gate, in parallel
+  <name>...        run the named gates or groups (code, hygiene)
+  --serial         run one gate at a time with live output
+  list             print the gates and any config overrides
+  fix              apply the formatters
+  sync             rewrite the managed files to match this full-lint commit
+  sync --check     report drift without writing (the sync-check gate)
+  tools [group]    install the pinned tools (all groups, or code/hygiene/mutation)
+  mutation         run the mutation-testing gate
+  version          print the pinned commit and the GitLab include integrity
+EOF
+}
+
+lang="${1:-}"
+if [[ -z "$lang" || ! -f "$FULL_LINT_ROOT/$lang/gates.sh" ]]; then
+	echo "full-lint: unknown language '$lang'; this commit supports: $(cd "$FULL_LINT_ROOT" && for g in */gates.sh; do printf '%s ' "${g%%/*}"; done)" >&2
+	exit 2
+fi
+shift
+
+source "$FULL_LINT_ROOT/lib/run.sh"
+source "$FULL_LINT_ROOT/lib/configs.sh"
+source "$FULL_LINT_ROOT/lib/hygiene.sh"
+source "$FULL_LINT_ROOT/lib/drift.sh"
+source "$FULL_LINT_ROOT/$lang/gates.sh"
+
+export PATH="$tools_dir/bin:$PATH"
+
+serial=0
+args=()
+for arg in "$@"; do
+	if [[ "$arg" == "--serial" ]]; then
+		serial=1
+	else
+		args+=("$arg")
+	fi
+done
+set -- "${args[@]}"
+
+case "${1:-}" in
+-h | --help | help)
+	usage
+	;;
+list)
+	report_overrides
+	list_gates
+	;;
+fix)
+	lang_fix
+	;;
+sync)
+	case "${2:-}" in
+	"") drift_sync ;;
+	--check) drift_check ;;
+	*)
+		echo "full-lint: sync takes no argument but --check" >&2
+		exit 2
+		;;
+	esac
+	;;
+tools)
+	shift
+	[[ $# -gt 0 ]] || set -- code hygiene mutation
+	wanted=()
+	for group in "$@"; do
+		case "$group" in
+		code) wanted+=("${code_tools[@]}") ;;
+		hygiene) wanted+=("${hygiene_tools[@]}") ;;
+		mutation) wanted+=("${mutation_tools[@]}") ;;
+		*)
+			echo "full-lint: tools takes code, hygiene or mutation, not '$group'" >&2
+			exit 2
+			;;
+		esac
+	done
+	"$FULL_LINT_ROOT/tools/install.sh" "$tools_dir" "${wanted[@]}"
+	;;
+mutation)
+	lang_mutation
+	;;
+version)
+	echo "commit: $FULL_LINT_SHA"
+	echo "tag: ${FULL_LINT_TAG:-(none)}"
+	if [[ -f "$FULL_LINT_ROOT/gitlab/$lang.yml" ]]; then
+		echo "integrity: sha256-$(openssl dgst -sha256 -binary "$FULL_LINT_ROOT/gitlab/$lang.yml" | base64)"
+	else
+		echo "integrity: (this commit has no gitlab/$lang.yml)"
+	fi
+	;;
+*)
+	selected="$(select_gates "$@")" || exit 2
+	report_overrides
+	# shellcheck disable=SC2086 # the indices are bare integers
+	run_gates "$serial" $selected
+	;;
+esac

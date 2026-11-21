@@ -134,6 +134,10 @@ for f in .github/workflows/hygiene.yml python/ci.yml rust/ci.yml go/ci.yml types
 		fail=1
 	fi
 done
+if ! grep -qF "$expected_license" lib/hygiene.sh; then
+	echo "CROSS-FOLDER DRIFT: lib/hygiene.sh does not carry the shared license allow-list"
+	fail=1
+fi
 
 # Runner drift: the shared hygiene gate entries (same names, same commands)
 # must match across the four folder run-gates.sh files; per-language entries
