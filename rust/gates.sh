@@ -7,6 +7,17 @@
 # reach [patch] path crates, whose lints cargo does not cap (a vendored fork's
 # warnings then fail the build).
 
+# Run once before any gate starts. On a fresh machine every parallel cargo
+# gate would start rustup's install of the pinned toolchain into the same
+# download dir, and the installs collide ("could not rename 'downloaded'
+# file"). With no argument, rustup 1.28+ installs what rust-toolchain.toml
+# names.
+prepare_gates() {
+	if [[ -f rust-toolchain.toml ]] && command -v rustup >/dev/null; then
+		rustup toolchain install
+	fi
+}
+
 # clippy reads clippy.toml from CLIPPY_CONF_DIR; pointing it at the bundled
 # copy only when the repo has none keeps a local clippy.toml in charge.
 if [[ ! -f clippy.toml && ! -f .clippy.toml ]]; then

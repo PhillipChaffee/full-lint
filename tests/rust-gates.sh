@@ -38,7 +38,7 @@ check() {
 }
 
 mkdir -p "$work/fakes"
-for tool in arborist osv-scanner; do
+for tool in arborist osv-scanner rustup; do
 	printf '#!/usr/bin/env bash\necho "%s args: $*"\n' "$tool" >"$work/fakes/$tool"
 	chmod +x "$work/fakes/$tool"
 done
@@ -57,6 +57,14 @@ check "advisories skip vendor/" 0 'osv-scanner args: scan -r \. --experimental-e
 
 echo '// TODO: ours' >>"$work/repo/src/lib.rs"
 check "todo-policy still fails on the repo's own source" 1 'src/lib\.rs:2:// TODO: ours' 'vendor/' todo-policy
+
+# Parallel cargo gates on a fresh machine each start rustup's install of the
+# pinned toolchain into one download dir, and the installs collide; the
+# runner installs it once, before any gate starts.
+echo 'fn clean() {}' >"$work/repo/src/lib.rs"
+check "no toolchain file, no install" 0 'PASS  todo-policy' 'rustup args' todo-policy
+printf '[toolchain]\nchannel = "1.98.0"\n' >"$work/repo/rust-toolchain.toml"
+check "the pinned toolchain installs before the gates start" 0 'rustup args: toolchain install[[:space:]]*$' '' todo-policy
 
 if [[ "$failures" -gt 0 ]]; then
 	echo "$failures rust gate test(s) failed"

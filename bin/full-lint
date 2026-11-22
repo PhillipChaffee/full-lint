@@ -110,6 +110,9 @@ version)
 *)
 	selected="$(select_gates "$@")" || exit 2
 	report_overrides
+	if declare -F prepare_gates >/dev/null; then
+		prepare_gates || exit 1
+	fi
 	# shellcheck disable=SC2086 # the indices are bare integers
 	run_gates "$serial" $selected
 	;;
