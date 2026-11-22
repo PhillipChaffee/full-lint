@@ -2,8 +2,10 @@
 # workflow and the GitLab entry point.
 # shellcheck shell=bash
 
-# CI parity: warnings fail every Rust gate locally too, not only on CI.
-export RUSTFLAGS="-D warnings"
+# No global RUSTFLAGS="-D warnings": clippy's `-- -D warnings` already denies
+# every rustc warning in the workspace's own targets, and RUSTFLAGS would also
+# reach [patch] path crates, whose lints cargo does not cap (a vendored fork's
+# warnings then fail the build).
 
 # clippy reads clippy.toml from CLIPPY_CONF_DIR; pointing it at the bundled
 # copy only when the repo has none keeps a local clippy.toml in charge.

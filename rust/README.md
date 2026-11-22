@@ -620,8 +620,9 @@ how-to-adopt section above lists the subcommands. The code group is
 `format`, `lint`, `doc`, `tests`, `coverage`, `cognitive`, `file-length`;
 the hygiene group is the eleven shared hygiene gates plus `deny-advisories`,
 `deny-licenses`, `deny-bans`, `unused-deps`, `todo-policy` and
-`sync-check`. Every Rust gate runs with `RUSTFLAGS=-D warnings`, locally as
-on CI.
+`sync-check`. Warnings fail through the lint gate's `-- -D warnings`, which
+covers every workspace target; there is no global `RUSTFLAGS`, because it
+would also reach `[patch]` path crates, whose lints cargo does not cap.
 
 Runner-CI parity holds by construction: the GitHub `code` and `hygiene`
 jobs and the two GitLab jobs run `./gates code` and `./gates hygiene`, the
