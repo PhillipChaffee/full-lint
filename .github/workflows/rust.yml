@@ -13,13 +13,46 @@ name: full-lint rust
 
 on:
   workflow_call:
+    inputs:
+      apt-packages:
+        description: >-
+          Ubuntu packages the code job installs before the first cargo call,
+          space-separated: the system libraries a dependency's build script
+          links, a virtual display for GUI tests. The gates read none of them.
+        type: string
+        default: ""
+      code:
+        description: >-
+          Run the code job. A caller that path-filters its Rust jobs passes
+          false on a change that needs none, and still runs hygiene.
+        type: boolean
+        default: true
+      hygiene:
+        description: Run the hygiene job.
+        type: boolean
+        default: true
+      code-timeout-minutes:
+        description: >-
+          The code job's timeout. Every code gate builds the workspace, so a
+          large dependency graph needs more than the default on a cold cache.
+        type: number
+        default: 20
 
 jobs:
   code:
+    if: inputs.code
     runs-on: ubuntu-latest
-    timeout-minutes: 20  # bounds a hung network gate; GitHub's default is 360
+    timeout-minutes: ${{ inputs.code-timeout-minutes }}  # bounds a hung gate; GitHub's default is 360
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - name: Install system packages
+        if: inputs.apt-packages != ''
+        env:
+          PACKAGES: ${{ inputs.apt-packages }}
+        run: |
+          sudo apt-get update
+          # shellcheck disable=SC2086 # one word per package, split on purpose
+          sudo apt-get install -y $PACKAGES
       # rustup reads rust-toolchain.toml (channel, components incl.
       # llvm-tools-preview) on the first cargo call; no toolchain step needed.
       # ~/.cache/full-lint holds the fetched full-lint commit and the pinned
@@ -44,6 +77,7 @@ jobs:
           file: target/lcov.info
 
   hygiene:
+    if: inputs.hygiene
     runs-on: ubuntu-latest
     timeout-minutes: 20  # bounds a hung network gate; GitHub's default is 360
     steps:

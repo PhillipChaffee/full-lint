@@ -103,5 +103,7 @@ jobs:
         run: yamllint ./.github/workflows/*.yml ./*/ci.yml ./*/mutation.yml ./gitlab/*.yml
       - name: Workflow lint (actionlint v1.7.12)
         run: actionlint ./.github/workflows/*.yml ./*/ci.yml ./*/mutation.yml
+      - name: Reusable workflow inputs self-test (tests/workflow-inputs.sh)
+        run: tests/workflow-inputs.sh
       - name: Lockfile integrity (hash-pinned install)
         run: pip install --require-hashes --dry-run -r python/requirements-lock.txt

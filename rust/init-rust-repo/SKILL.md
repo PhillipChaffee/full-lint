@@ -76,7 +76,9 @@ piece; the steps below assume that reasoning and only record the work.
        uses: PhillipChaffee/full-lint/.github/workflows/rust.yml@<sha>  # <tag>
    ```
 
-   and `.github/workflows/mutation.yml`:
+   A crate whose build links system libraries passes them to the code job
+   (`with: apt-packages: "<packages>"`); rust/README.md lists the other
+   inputs. Then `.github/workflows/mutation.yml`:
 
    ```yaml
    permissions:

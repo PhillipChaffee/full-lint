@@ -59,6 +59,17 @@ writes all of it.
 `FULL_LINT_DIR=<checkout> ./gates` runs a local full-lint checkout instead
 of the pinned commit, for working on full-lint itself.
 
+The reusable `rust.yml` takes four inputs, none of which changes a gate:
+`apt-packages` (Ubuntu packages the code job installs before the first
+cargo call, such as the GTK and xcb libraries a GUI crate's build scripts
+link), `code` and `hygiene` (booleans, default true, so a caller that
+path-filters its Rust jobs can skip the code job on a docs-only change and
+still run hygiene), and `code-timeout-minutes` (default 20, for a
+dependency graph whose cold build takes longer). On GitLab the same needs
+are met by redefining `full-lint-code`'s `before_script`, `rules` or
+`timeout` in the repo's `.gitlab-ci.yml`, which GitLab merges over the
+include.
+
 `vendor/` at any depth (`cargo vendor` output, patched forks) is outside
 every gate that walks the tree: cognitive, file-length, todo-policy, and
 the osv-scanner advisory and license scans, whose vendored lockfiles are
