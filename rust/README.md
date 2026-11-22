@@ -40,7 +40,10 @@ writes all of it.
   key fails `sync-check`; an added key needs a trailing
   `# exception: <reason>` and then passes with a warning; an added key
   without the marker fails. `./gates sync` rewrites both files and keeps the
-  marked additions. A canonical value cannot be lowered locally: the floor
+  marked additions. A repo that already has `[workspace.lints]` tables
+  puts the block markers around them first; until it does, `sync-check`
+  fails and `sync` refuses to write Cargo.toml, since a second copy of the
+  tables is a duplicate key cargo rejects. A canonical value cannot be lowered locally: the floor
   is shared, and a lint the repo truly cannot meet takes a scoped
   `#[expect(..., reason = "...")]` in the code.
 

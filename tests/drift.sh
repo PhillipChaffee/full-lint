@@ -127,6 +127,20 @@ check "an edited gates stub fails" 1 'gates: error: differs' sync --check
 check "sync restores the stub" 0 'wrote gates' sync
 cmp -s "$work/repo/gates" "$root/consumer/gates" || fail "sync did not restore gates"
 
+# A repo that adopts full-lint after writing its own lint tables: sync must
+# not append a second copy of them, which cargo rejects as a duplicate key.
+fresh_repo
+printf '\n[workspace.lints.clippy]\npedantic = { level = "warn", priority = -1 }\n\n[lints]\nworkspace = true\n' >>"$work/repo/Cargo.toml"
+cp "$work/repo/Cargo.toml" "$work/own-tables.toml"
+check "lint tables outside the block fail the check" 1 'Cargo.toml:[0-9]+: error: \[workspace.lints.clippy\] is outside the managed block' sync --check
+check "sync refuses to append beside them" 1 'sync: Cargo.toml:[0-9]+: error: \[workspace.lints.clippy\] is outside the managed block' sync
+cmp -s "$work/repo/Cargo.toml" "$work/own-tables.toml" || fail "the refused sync changed Cargo.toml"
+begin="$(grep -m1 '^# >>> full-lint managed' "$work/synced.toml")"
+end="$(grep -m1 '^# <<< full-lint managed' "$work/synced.toml")"
+awk -v b="$begin" -v e="$end" '/^\[workspace.lints.clippy\]$/ { print b } /^\[lints\]$/ { print e; print "" } { print }' "$work/own-tables.toml" >"$work/repo/Cargo.toml"
+check "the same tables inside the markers sync" 0 'wrote Cargo.toml' sync
+check "and then pass" 0 'match full-lint' sync --check
+
 if [[ "$failures" -gt 0 ]]; then
 	echo "$failures drift test(s) failed"
 	exit 1

@@ -34,6 +34,7 @@ managed() {
 #   N <message>          sync note     R <text>            rendered line
 #   B <line> / Z <line>  block begin / end line in the consumer file
 #   P <0|1>              1 when [package] has no [lints] table at all
+#   O <line>             a managed section outside the block (sync refuses)
 # The parser is line-shaped on purpose: managed entries are one
 # `key = value` per line, and anything else inside managed content is an
 # error rather than a guess.
@@ -109,6 +110,10 @@ FNR == NR {
 		if (!inblock) {
 			parse($0)
 			if (KIND == "header") outsec = SEC
+			if (KIND == "header" && (SEC in secseen)) {
+				print "E\t" FNR "\t[" SEC "] is outside the managed block; put the block markers around the existing lint tables, mark each line full-lint does not carry with \"# exception: <reason>\", then run ./gates sync"
+				print "O\t" FNR
+			}
 			if (KIND == "header" && SEC == "package") haspkg = 1
 			if (KIND == "header" && SEC == "lints") haslints = 1
 			if (KIND == "key" && outsec == "lints" && KEY == "workspace" && VAL == "true") lintsws = 1
@@ -220,6 +225,13 @@ drift_sync_file() {
 	else
 		[[ -f "$file" ]] || : >"$file"
 		records="$(drift_records block "$canon" "$file")"
+		# Appending a block beside tables of the same name would leave a
+		# manifest cargo rejects as a duplicate key.
+		if grep -q $'^O\t' <<<"$records"; then
+			awk -F'\t' -v f="$file" '$1 == "E" && /outside the managed block/ { print "sync: " f ":" $2 ": error: " $3 }' <<<"$records" >&2
+			rm -f "$tmp"
+			return 1
+		fi
 		b="$(awk -F'\t' '$1 == "B" { print $2; exit }' <<<"$records")"
 		z="$(awk -F'\t' '$1 == "Z" { print $2; exit }' <<<"$records")"
 		{
@@ -301,13 +313,14 @@ drift_check() {
 }
 
 drift_sync() {
-	local i
+	local i rc=0
 	for i in "${!managed_files[@]}"; do
-		drift_sync_file "${managed_modes[$i]}" "${managed_files[$i]}" "${managed_canon[$i]}"
+		drift_sync_file "${managed_modes[$i]}" "${managed_files[$i]}" "${managed_canon[$i]}" || rc=1
 	done
 	if [[ -f gates ]] && ! cmp -s gates "$FULL_LINT_ROOT/consumer/gates"; then
 		cp "$FULL_LINT_ROOT/consumer/gates" gates
 		chmod +x gates
 		echo "sync: wrote gates"
 	fi
+	return "$rc"
 }
