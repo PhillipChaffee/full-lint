@@ -26,6 +26,8 @@ jobs:
         run: tests/drift.sh
       - name: Gates stub self-test (tests/stub.sh)
         run: tests/stub.sh
+      - name: Rust gate scope self-test (tests/rust-gates.sh)
+        run: tests/rust-gates.sh
       - name: Install pinned hygiene tools
         run: |
           # Pinned hygiene tools: one download per tool, no installer actions.

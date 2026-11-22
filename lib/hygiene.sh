@@ -6,6 +6,18 @@
 # shellcheck disable=SC2034 # read by bin/full-lint's `tools` command
 hygiene_tools=(typos markdownlint-cli2 lychee gitleaks jscpd osv-scanner shellcheck shfmt yamllint actionlint)
 
+# Directories the dependency scans skip, by name at any depth; a language
+# sets it when its ecosystem vendors sources whose lockfiles do not ship.
+osv_excludes=()
+
+osv_scan() {
+	local args=() dir
+	for dir in "${osv_excludes[@]}"; do
+		args+=(--experimental-exclude "$dir")
+	done
+	osv-scanner scan -r . "${args[@]}" "$@"
+}
+
 # Tracked shell scripts, plus the committed gates stub, which has no suffix.
 shell_files() {
 	{
@@ -58,7 +70,7 @@ license_check() {
 			printf '\n[[PackageOverrides]]\nname = "%s"\necosystem = "%s"\nlicense.ignore = true\nreason = "built by this repository, not a dependency"\n' "$name" "$ecosystem"
 		done
 	} >"$config"
-	osv-scanner scan -r . --config "$config" --licenses="$license_allow" || rc=$?
+	osv_scan --config "$config" --licenses="$license_allow" || rc=$?
 	rm -f "$config"
 	return "$rc"
 }
@@ -73,7 +85,7 @@ register_hygiene() {
 	gate hygiene link-check 'lychee --no-progress --config "$(cfg lychee.toml)" .'
 	gate hygiene secret-scan 'gitleaks detect --source . --redact --config "$(cfg .gitleaks.toml)"'
 	gate hygiene duplication 'jscpd --config "$(cfg .jscpd.json)" .'
-	gate hygiene advisories 'osv-scanner scan -r .'
+	gate hygiene advisories osv_scan
 	gate hygiene license-check license_check
 	gate hygiene shell-lint 'shell_files | xargs -r -d "\n" shellcheck'
 	gate hygiene shell-format 'shell_files | xargs -r -d "\n" shfmt -d'

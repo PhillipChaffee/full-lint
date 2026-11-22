@@ -19,6 +19,18 @@ config_add .clippy.toml rust/clippy.toml
 managed block Cargo.toml rust/Cargo.toml.example
 managed file rust-toolchain.toml rust/rust-toolchain.toml
 
+# vendor/ holds third-party sources (`cargo vendor` output, patched forks)
+# that this repo reviews against upstream, not against these gates. Every
+# gate that walks the tree skips it, as the file-length gate always has.
+# shellcheck disable=SC2034 # read by lib/hygiene.sh's dependency scans
+osv_excludes=(vendor)
+
+# The Rust files the source gates read: tracked or untracked, .gitignore
+# honored, vendor/ skipped at any depth.
+rust_sources() {
+	git ls-files --cached --others --exclude-standard -- '*.rs' ':(exclude,glob)**/vendor/**'
+}
+
 # shellcheck disable=SC2034 # read by bin/full-lint's `tools` command
 code_tools=(cargo-llvm-cov arborist)
 # shellcheck disable=SC2034
@@ -42,7 +54,7 @@ mutation_tools=(cargo-mutants)
 	# Threshold 15 is Sonar's S3776 default, the parity anchor every
 	# language here gates at; arborist has no config file, so it lives here.
 	# Measured divergences from the spec are in rust/README.md.
-	gate code cognitive 'arborist --threshold 15 --exceeds-only --gitignore --languages rust .'
+	gate code cognitive 'rust_sources | xargs -r -d "\n" arborist --threshold 15 --exceeds-only --languages rust'
 	gate code file-length '"$FULL_LINT_ROOT/rust/effective-lines-gate.sh"'
 
 	register_hygiene
@@ -51,7 +63,7 @@ mutation_tools=(cargo-mutants)
 	gate hygiene deny-licenses 'cargo deny --config "$(cfg deny.toml)" check licenses'
 	gate hygiene deny-bans 'cargo deny --config "$(cfg deny.toml)" check bans'
 	gate hygiene unused-deps 'cargo shear --deny-warnings'
-	gate hygiene todo-policy 'rc=0; git grep --untracked --no-recurse-submodules -nE "TODO|FIXME" -- "*.rs" || rc=$?; test "$rc" -eq 1'
+	gate hygiene todo-policy 'rc=0; git grep --untracked --no-recurse-submodules -nE "TODO|FIXME" -- "*.rs" ":(exclude,glob)**/vendor/**" || rc=$?; test "$rc" -eq 1'
 	gate hygiene sync-check drift_check
 }
 

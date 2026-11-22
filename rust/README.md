@@ -59,6 +59,12 @@ writes all of it.
 `FULL_LINT_DIR=<checkout> ./gates` runs a local full-lint checkout instead
 of the pinned commit, for working on full-lint itself.
 
+`vendor/` at any depth (`cargo vendor` output, patched forks) is outside
+every gate that walks the tree: cognitive, file-length, todo-policy, and
+the osv-scanner advisory and license scans, whose vendored lockfiles are
+not the one that ships. A repo that vendors sources also gives typos,
+markdownlint, lychee and jscpd a local config that excludes it.
+
 ## What is enforced
 
 ### Linting — clippy
@@ -94,8 +100,12 @@ warn level here is an error in CI. The doc lints do not take that courtesy path.
 ### Complexity — cognitive (arborist)
 
 ```bash
-arborist --threshold 15 --exceeds-only --gitignore --languages rust .
+git ls-files --cached --others --exclude-standard -- '*.rs' ':(exclude,glob)**/vendor/**' |
+  xargs -r -d '\n' arborist --threshold 15 --exceeds-only --languages rust
 ```
+
+arborist has no exclude switch, so the gate hands it the file list: every
+Rust file git tracks or would track, `vendor/` left out.
 
 Cognitive complexity is the only complexity metric this stack gates (the
 consolidation decision). The gate is **arborist-cli 0.2.1**, installed
@@ -442,8 +452,8 @@ carries no lockfiles, so the step lives in each folder's CI and runner: it
 targets the initialized repository, where the lockfiles exist.
 
 ```bash
-osv-scanner scan -r .
-osv-scanner scan -r . --licenses="MIT,Apache-2.0,ISC,BSD-3-Clause,BSD-2-Clause,MPL-2.0,PSF-2.0,Unicode-3.0,Python-2.0,Unlicense,CC0-1.0,0BSD,Apache-1.1,BSD-3-Clause-Clear,LGPL-3.0-only,BlueOak-1.0.0,CC-BY-3.0"
+osv-scanner scan -r . --experimental-exclude vendor
+osv-scanner scan -r . --experimental-exclude vendor --licenses="MIT,Apache-2.0,ISC,BSD-3-Clause,BSD-2-Clause,MPL-2.0,PSF-2.0,Unicode-3.0,Python-2.0,Unlicense,CC0-1.0,0BSD,Apache-1.1,BSD-3-Clause-Clear,LGPL-3.0-only,BlueOak-1.0.0,CC-BY-3.0"
 ```
 
 The allow-list is the shared house list; its wider entries (MPL-2.0,
